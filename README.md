@@ -4,7 +4,7 @@ pearOS Studio is the Android companion app for designing and prototyping a custo
 
 ## Current app features
 - Dark pearOS Studio workspace with responsive navigation
-- Project overview and editable system configuration
+- Project overview and editable system configuration\n- Local persistence for project name and source across app restarts
 - Import supported text source/config files from Android's document picker
 - Export the current configuration as JSON
 - Clickable desktop-shell preview with a dock, status bar, start menu and sample app windows

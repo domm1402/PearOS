@@ -57,6 +57,7 @@ fun PearStudio() {
     var code by remember { mutableStateOf(defaultCode) }
     var importedName by remember { mutableStateOf<String?>(null) }
     var showBuild by remember { mutableStateOf(false) }
+    var buildReport by remember { mutableStateOf("Run a configuration check before preparing a preview.") }
     var showNew by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
@@ -96,8 +97,16 @@ fun PearStudio() {
                         onImport = { importLauncher.launch(arrayOf("*/*")) },
                         onNew = { showNew = true }
                     )
-                    "Code editor" -> EditorScreen(code, { code = it }, { showBuild = true }, {
-                        saveLauncher.launch("pearos-source.txt")
+                    "Code editor" -> EditorScreen(code, { code = it }, {
+                        buildReport = runCatching {
+                            val config = org.json.JSONObject(code)
+                            val osName = config.optString("name", "Unnamed OS")
+                            val version = config.optString("version", "unspecified")
+                            "Configuration valid.\\n\\nProject: $osName\\nVersion: $version\\n\\nThis checks JSON only. A bootable device image still needs a matching Android source tree, kernel, vendor files and device build environment."
+                        }.getOrElse { "Configuration check failed: " + (it.localizedMessage ?: "Invalid JSON") + ". Fix the JSON syntax and try again." }
+                        showBuild = true
+                    }, {
+                        saveLauncher.launch("pearos-config.json")
                     })
                     "Appearance" -> AppearanceScreen()
                     "Files" -> FilesScreen(importedName, { importLauncher.launch(arrayOf("*/*")) })
@@ -113,7 +122,7 @@ fun PearStudio() {
                 onDismissRequest = { showBuild = false },
                 containerColor = Panel2,
                 title = { Text("Build preview", color = White, fontWeight = FontWeight.Bold) },
-                text = { Text("Your pearOS project is ready for the next build stage. This first release creates an interactive design and source workspace. A bootable Android OS image requires a device-specific Android source tree, kernel, vendor files and bootloader support.", color = Muted) },
+                text = { Text(buildReport, color = Muted) },
                 confirmButton = { TextButton(onClick = { showBuild = false; page = "Builds" }) { Text("View builds") } },
                 dismissButton = { TextButton(onClick = { showBuild = false }) { Text("Close") } }
             )
@@ -292,7 +301,7 @@ private fun EditorScreen(code: String, onCode: (String) -> Unit, onBuild: () -> 
             )
         }
         Button(onClick = onBuild, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)) {
-            Icon(Icons.Rounded.RocketLaunch, null); Spacer(Modifier.width(8.dp)); Text("Build OS preview")
+            Icon(Icons.Rounded.RocketLaunch, null); Spacer(Modifier.width(8.dp)); Text("Check configuration")
         }
         Text("This editor currently edits a starter configuration, not a Linux/Android kernel source tree.", color = Muted, fontSize = 10.sp)
     }

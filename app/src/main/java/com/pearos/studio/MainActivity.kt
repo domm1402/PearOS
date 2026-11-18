@@ -52,15 +52,20 @@ private val White = Color(0xFFF4F7FC)
 
 @Composable
 fun PearStudio() {
+    val context = LocalContext.current
+    val preferences = remember { context.getSharedPreferences("pearos-workspace", android.content.Context.MODE_PRIVATE) }
     var page by remember { mutableStateOf("Overview") }
-    var projectName by remember { mutableStateOf("My pearOS") }
-    var code by remember { mutableStateOf(defaultCode) }
+    var projectName by remember { mutableStateOf(preferences.getString("project_name", "My pearOS") ?: "My pearOS") }
+    var code by remember { mutableStateOf(preferences.getString("source_config", defaultCode) ?: defaultCode) }
     var importedName by remember { mutableStateOf<String?>(null) }
     var showBuild by remember { mutableStateOf(false) }
     var buildReport by remember { mutableStateOf("Run a configuration check before preparing a preview.") }
     var showNew by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<String?>(null) }
-    val context = LocalContext.current
+
+    LaunchedEffect(projectName, code) {
+        preferences.edit().putString("project_name", projectName).putString("source_config", code).apply()
+    }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {

@@ -91,36 +91,27 @@ fun PearStudio() {
         background = Ink, surface = Panel, primary = Mint, onPrimary = Ink,
         onBackground = White, onSurface = White, secondary = Color(0xFF9AB7FF)
     )) {
-        Row(Modifier.fillMaxSize().background(Ink)) {
-            NavigationRail(page = page, onPage = { page = it })
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-                TopBar(projectName, importedName)
+        Column(Modifier.fillMaxSize().background(Ink)) {
+            TopBar(projectName, importedName)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
                 when (page) {
-                    "Overview" -> OverviewScreen(
-                        projectName, importedName,
-                        onOpenEditor = { page = "Code editor" },
-                        onImport = { importLauncher.launch(arrayOf("*/*")) },
-                        onNew = { showNew = true }
-                    )
+                    "Overview" -> OverviewScreen(projectName, importedName, { page = "Code editor" }, { importLauncher.launch(arrayOf("*/*")) }, { showNew = true })
                     "Code editor" -> EditorScreen(code, { code = it }, {
                         buildReport = runCatching {
                             val config = org.json.JSONObject(code)
-                            val osName = config.optString("name", "Unnamed OS")
-                            val version = config.optString("version", "unspecified")
-                            "Configuration valid.\\n\\nProject: $osName\\nVersion: $version\\n\\nThis checks JSON only. A bootable device image still needs a matching Android source tree, kernel, vendor files and device build environment."
+                            "Configuration valid.\\n\\nProject: ${config.optString("name", "Unnamed OS")}\\nVersion: ${config.optString("version", "unspecified")}\\n\\nThis checks JSON only. A bootable image still needs matching device source, kernel and vendor files."
                         }.getOrElse { "Configuration check failed: " + (it.localizedMessage ?: "Invalid JSON") + ". Fix the JSON syntax and try again." }
                         showBuild = true
-                    }, {
-                        saveLauncher.launch("pearos-config.json")
-                    })
+                    }, { saveLauncher.launch("pearos-config.json") })
                     "Appearance" -> AppearanceScreen()
                     "Files" -> FilesScreen(importedName, { importLauncher.launch(arrayOf("*/*")) })
                     "Builds" -> BuildsScreen { showBuild = true }
-                    "Preview" -> DesktopPreviewScreen(projectName)
+                    "Preview" -> PhonePreviewScreen(projectName)
                     "Templates" -> TemplatesScreen { template -> code = template; page = "Code editor"; notice = "Template loaded" }
                     else -> OverviewScreen(projectName, importedName, { page = "Code editor" }, { importLauncher.launch(arrayOf("*/*")) }, { showNew = true })
                 }
             }
+            PhoneNavigationBar(page = page, onPage = { page = it })
         }
         if (showBuild) {
             AlertDialog(
@@ -158,39 +149,25 @@ fun PearStudio() {
 }
 
 @Composable
-private fun NavigationRail(page: String, onPage: (String) -> Unit) {
+private fun PhoneNavigationBar(page: String, onPage: (String) -> Unit) {
     val items = listOf(
-        Triple("Overview", Icons.Rounded.Dashboard, "Home"),
+        Triple("Overview", Icons.Rounded.Home, "Home"),
+        Triple("Preview", Icons.Rounded.PhoneAndroid, "Preview"),
+        Triple("Appearance", Icons.Rounded.Palette, "Style"),
         Triple("Code editor", Icons.Rounded.Code, "Code"),
-        Triple("Appearance", Icons.Rounded.Palette, "Design"),
         Triple("Files", Icons.Rounded.FolderOpen, "Files"),
-        Triple("Builds", Icons.Rounded.RocketLaunch, "Builds"),
-        Triple("Preview", Icons.Rounded.DesktopWindows, "Preview"),
-        Triple("Templates", Icons.Rounded.DashboardCustomize, "Templates")
+        Triple("Builds", Icons.Rounded.RocketLaunch, "Build"),
+        Triple("Templates", Icons.Rounded.DashboardCustomize, "More")
     )
-    Column(
-        Modifier.width(76.dp).fillMaxHeight().background(Color(0xFF101625)).padding(vertical = 18.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Brush.linearGradient(listOf(Mint, Color(0xFF76B5FF)))), Alignment.Center) {
-            Text("p", color = Ink, fontSize = 28.sp, fontWeight = FontWeight.Black)
-        }
-        Spacer(Modifier.height(28.dp))
+    Row(Modifier.fillMaxWidth().background(Color(0xFF101625)).navigationBarsPadding().padding(horizontal = 3.dp, vertical = 7.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
         items.forEach { (key, icon, label) ->
             val selected = page == key
-            Column(
-                Modifier.padding(vertical = 5.dp).width(62.dp).clip(RoundedCornerShape(16.dp))
-                    .background(if (selected) Color(0xFF263849) else Color.Transparent)
-                    .clickable { onPage(key) }.padding(vertical = 11.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(icon, null, tint = if (selected) Mint else Muted, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.height(4.dp))
-                Text(label, fontSize = 9.sp, color = if (selected) Mint else Muted)
+            Column(Modifier.weight(1f).clip(RoundedCornerShape(13.dp)).background(if (selected) Color(0xFF263849) else Color.Transparent).clickable { onPage(key) }.padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(icon, null, tint = if (selected) Mint else Muted, modifier = Modifier.size(19.dp))
+                Spacer(Modifier.height(3.dp))
+                Text(label, fontSize = 8.sp, color = if (selected) Mint else Muted, maxLines = 1)
             }
         }
-        Spacer(Modifier.weight(1f))
-        Icon(Icons.Rounded.Settings, null, tint = Muted, modifier = Modifier.padding(12.dp).size(22.dp))
     }
 }
 
@@ -362,45 +339,125 @@ private fun BuildsScreen(onBuild: () -> Unit) {
 }
 
 @Composable
-private fun DesktopPreviewScreen(project: String) {
-    var startOpen by remember { mutableStateOf(false) }
-    var selectedWindow by remember { mutableStateOf("Welcome") }
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Live desktop preview", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-        Text("A clickable concept of the pearOS desktop shell.", color = Muted, fontSize = 12.sp)
-        Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(Color(0xFF253C58), Color(0xFF5B4C83), Color(0xFF182A3C)))).padding(14.dp)) {
-            Column(Modifier.fillMaxSize()) {
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xAA101625)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("pearOS", color = White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    Text("18:42   Wi-Fi  92%", color = White, fontSize = 10.sp)
+private fun PhonePreviewScreen(project: String) {
+    var screen by remember { mutableStateOf("Home") }
+    var openedApp by remember { mutableStateOf<String?>(null) }
+    var quickPanel by remember { mutableStateOf(false) }
+    val apps = listOf(
+        Triple("Phone", Icons.Rounded.Call, Color(0xFF5ACB91)),
+        Triple("Messages", Icons.Rounded.ChatBubble, Color(0xFF69A9FF)),
+        Triple("Camera", Icons.Rounded.PhotoCamera, Color(0xFFB49AFF)),
+        Triple("Gallery", Icons.Rounded.Photo, Color(0xFFFF9B83)),
+        Triple("Music", Icons.Rounded.MusicNote, Color(0xFFE58BB7)),
+        Triple("Files", Icons.Rounded.Folder, Color(0xFFFFC66D)),
+        Triple("Browser", Icons.Rounded.Language, Color(0xFF75C9D8)),
+        Triple("Settings", Icons.Rounded.Settings, Color(0xFFA8B4C8))
+    )
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Phone preview", color = White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text("A touch-first pearOS mobile shell", color = Muted, fontSize = 11.sp)
+            }
+            Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Panel).padding(3.dp)) {
+                listOf("Lock", "Home").forEach { choice ->
+                    Text(choice, color = if (screen == choice) Ink else Muted, fontSize = 10.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clip(RoundedCornerShape(9.dp)).background(if (screen == choice) Mint else Color.Transparent).clickable { screen = choice; openedApp = null }.padding(horizontal = 10.dp, vertical = 8.dp))
                 }
-                Spacer(Modifier.height(18.dp))
-                Text("Good evening.", color = White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                Text(project, color = Color(0xFFD4DCEE), fontSize = 12.sp)
-                Spacer(Modifier.height(18.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("Files", "Browser", "Settings").forEach { app ->
-                        Column(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xAA151B2B)).clickable { selectedWindow = app }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Rounded.Apps, null, tint = Mint)
-                            Text(app, color = White, fontSize = 10.sp)
-                        }
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                if (selectedWindow != "Welcome") {
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xEE151B2B)).padding(14.dp)) {
-                        Text(selectedWindow, color = White, fontWeight = FontWeight.Bold)
-                        Text("Preview window. Native app integration is a later runtime milestone.", color = Muted, fontSize = 11.sp)
-                    }
-                }
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0xCC101625)).padding(10.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { startOpen = !startOpen }) { Icon(Icons.Rounded.GridView, null, tint = Mint) }
-                    listOf(Icons.Rounded.Folder, Icons.Rounded.Language, Icons.Rounded.Settings).forEach { Icon(it, null, tint = White, modifier = Modifier.size(22.dp)) }
-                }
-                if (startOpen) Text("Start menu  •  Files  •  Browser  •  Settings", color = White, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
             }
         }
-        Text("Preview only. This does not replace Android or run a separate OS.", color = Muted, fontSize = 10.sp)
+        Spacer(Modifier.height(14.dp))
+        Column(Modifier.widthIn(max = 340.dp).fillMaxWidth().clip(RoundedCornerShape(38.dp)).border(2.dp, Color(0xFF64728B), RoundedCornerShape(38.dp)).background(Brush.linearGradient(listOf(Color(0xFF152A3D), Color(0xFF38466D), Color(0xFF71558A)))).padding(13.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("9:41", color = White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                Box(Modifier.width(66.dp).height(17.dp).clip(CircleShape).background(Color(0xFF080C14)))
+                Text("5G  ▰", color = White, fontSize = 10.sp)
+            }
+            if (screen == "Lock") {
+                Spacer(Modifier.height(48.dp))
+                Text("Tuesday, 18 November", color = Color(0xFFDCE6F8), fontSize = 12.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+                Text("9:41", color = White, fontSize = 62.sp, fontWeight = FontWeight.Light, modifier = Modifier.align(Alignment.CenterHorizontally))
+                Spacer(Modifier.height(24.dp))
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0x55202C48)).padding(14.dp)) {
+                    Text("NOTIFICATIONS", color = Color(0xFFD4E2F7), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                    Spacer(Modifier.height(7.dp))
+                    Text("Messages", color = White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    Text("Your pearOS setup is looking good.", color = Color(0xFFD4E2F7), fontSize = 10.sp)
+                    Spacer(Modifier.height(9.dp))
+                    Text("Calendar", color = White, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+                    Text("Nothing planned for the afternoon.", color = Color(0xFFD4E2F7), fontSize = 10.sp)
+                }
+                Spacer(Modifier.height(35.dp))
+                Row(Modifier.fillMaxWidth().padding(bottom = 9.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("●", color = White, modifier = Modifier.clip(CircleShape).background(Color(0x55405070)).clickable { quickPanel = !quickPanel }.padding(12.dp))
+                    Text("Tap to unlock", color = White, fontSize = 10.sp, modifier = Modifier.align(Alignment.CenterVertically).clickable { screen = "Home" })
+                    Text("◉", color = White, modifier = Modifier.clip(CircleShape).background(Color(0x55405070)).clickable { openedApp = "Camera" }.padding(12.dp))
+                }
+            } else {
+                Spacer(Modifier.height(22.dp))
+                Text("Tuesday, 18 November", color = Color(0xFFDCE6F8), fontSize = 11.sp)
+                Text("Good morning", color = White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Text(project, color = Color(0xFFDCE6F8), fontSize = 11.sp)
+                Spacer(Modifier.height(15.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(Modifier.weight(1f).clip(RoundedCornerShape(19.dp)).background(Color(0x66202C48)).padding(12.dp)) {
+                        Text("WEATHER", color = Color(0xFFDCE6F8), fontSize = 8.sp, letterSpacing = 1.sp)
+                        Text("18°", color = White, fontSize = 27.sp, fontWeight = FontWeight.Light)
+                        Text("Partly cloudy", color = Color(0xFFDCE6F8), fontSize = 9.sp)
+                    }
+                    Column(Modifier.weight(1f).clip(RoundedCornerShape(19.dp)).background(Color(0x66202C48)).padding(12.dp)) {
+                        Text("YOUR DAY", color = Color(0xFFDCE6F8), fontSize = 8.sp, letterSpacing = 1.sp)
+                        Text("All clear", color = White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                        Text("No upcoming events", color = Color(0xFFDCE6F8), fontSize = 9.sp)
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                if (openedApp == null) {
+                    Text("YOUR APPS", color = Color(0xFFDCE6F8), fontSize = 9.sp, letterSpacing = 1.4.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(9.dp))
+                    apps.chunked(4).forEach { rowApps ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                            rowApps.forEach { (name, icon, tint) ->
+                                Column(Modifier.weight(1f).clickable { openedApp = name }.padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(Modifier.size(46.dp).clip(RoundedCornerShape(15.dp)).background(tint), Alignment.Center) { Icon(icon, null, tint = Color(0xFF101625), modifier = Modifier.size(24.dp)) }
+                                    Spacer(Modifier.height(5.dp))
+                                    Text(name, color = White, fontSize = 9.sp, maxLines = 1)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color(0xDD172238)).padding(18.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(openedApp!!, color = White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                            Text("✕", color = White, modifier = Modifier.clickable { openedApp = null }.padding(5.dp))
+                        }
+                        Spacer(Modifier.height(22.dp))
+                        Text("$openedApp preview", color = Color(0xFFDCE6F8), fontSize = 13.sp)
+                        Text("Interactive mock app screen inside the pearOS concept.", color = Muted, fontSize = 10.sp)
+                    }
+                }
+                Spacer(Modifier.height(15.dp))
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color(0xAA111A2B)).padding(9.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    listOf(Icons.Rounded.Call, Icons.Rounded.ChatBubble, Icons.Rounded.Language, Icons.Rounded.PhotoCamera).forEachIndexed { index, icon ->
+                        Icon(icon, null, tint = White, modifier = Modifier.size(23.dp).clickable { openedApp = listOf("Phone", "Messages", "Browser", "Camera")[index] })
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.width(95.dp).height(4.dp).clip(CircleShape).background(Color(0xCCFFFFFF)).align(Alignment.CenterHorizontally).clickable { screen = if (screen == "Lock") "Home" else "Lock"; openedApp = null })
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(15.dp)).background(Panel).clickable { quickPanel = !quickPanel }.padding(13.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.Tune, null, tint = Mint)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Quick settings preview", color = White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Text(if (quickPanel) "Wi-Fi  •  Bluetooth  •  Do not disturb  •  Brightness" else "Tap to inspect the phone control panel", color = Muted, fontSize = 10.sp)
+            }
+            Icon(if (quickPanel) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, null, tint = Muted)
+        }
+        Text("Tap app icons, switch between lock and home screens, and open quick settings. This is a design preview, not a replacement Android launcher yet.", color = Muted, fontSize = 10.sp, lineHeight = 15.sp)
     }
 }
 
@@ -437,10 +494,15 @@ private val defaultCode = """{
     "theme": "midnight",
     "accent": "#8CF0C5",
     "glass": true,
-    "desktopMode": true
+    "desktopMode": false
   },
   "features": {
     "adaptiveHome": true,
+    "lockScreen": true,
+    "notificationCenter": true,
+    "quickSettingsPanel": true,
+    "gestureNavigation": true,
+    "mobileDock": true,
     "windowManager": true,
     "quickSettings": true,
     "appDock": true,

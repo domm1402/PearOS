@@ -63,17 +63,21 @@ fun PearStudio() {
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             importedName = uri.lastPathSegment?.substringAfterLast('/') ?: "Imported OS file"
-            notice = "Imported: $importedName"
+            val lower = importedName.orEmpty().lowercase()
+            if (listOf(".json", ".txt", ".xml", ".kt", ".md").any { lower.endsWith(it) }) {
+                runCatching { context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText().take(500_000) } }
+                    .onSuccess { importedText -> if (!importedText.isNullOrBlank()) { code = importedText; notice = "Source imported into editor" } else notice = "File selected" }
+                    .onFailure { notice = "Could not read source file" }
+            } else notice = "Selected $importedName. Binary images and archives are not flashed or unpacked."
         }
     }
-    val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri: Uri? ->
+    val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
         if (uri != null) {
-            runCatching {
-                // The Android document provider owns the destination stream.
-                // Source saving is performed below using the app content resolver.
-            }
-            notice = "Choose a destination in the save dialog to export your source."
+            runCatching { context.contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(code) } ?: error("Could not open destination") }
+                .onSuccess { notice = "Source exported successfully" }
+                .onFailure { notice = "Export failed" }
         }
     }
 
@@ -98,6 +102,8 @@ fun PearStudio() {
                     "Appearance" -> AppearanceScreen()
                     "Files" -> FilesScreen(importedName, { importLauncher.launch(arrayOf("*/*")) })
                     "Builds" -> BuildsScreen { showBuild = true }
+                    "Preview" -> DesktopPreviewScreen(projectName)
+                    "Templates" -> TemplatesScreen { template -> code = template; page = "Code editor"; notice = "Template loaded" }
                     else -> OverviewScreen(projectName, importedName, { page = "Code editor" }, { importLauncher.launch(arrayOf("*/*")) }, { showNew = true })
                 }
             }
@@ -144,7 +150,9 @@ private fun NavigationRail(page: String, onPage: (String) -> Unit) {
         Triple("Code editor", Icons.Rounded.Code, "Code"),
         Triple("Appearance", Icons.Rounded.Palette, "Design"),
         Triple("Files", Icons.Rounded.FolderOpen, "Files"),
-        Triple("Builds", Icons.Rounded.RocketLaunch, "Builds")
+        Triple("Builds", Icons.Rounded.RocketLaunch, "Builds"),
+        Triple("Preview", Icons.Rounded.DesktopWindows, "Preview"),
+        Triple("Templates", Icons.Rounded.DashboardCustomize, "Templates")
     )
     Column(
         Modifier.width(76.dp).fillMaxHeight().background(Color(0xFF101625)).padding(vertical = 18.dp),
@@ -201,8 +209,7 @@ private fun OverviewScreen(
             Column {
                 Text("YOUR IDEAS. YOUR OS.", color = Mint, fontSize = 10.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(10.dp))
-                Text("Build a world
-that boots your way.", color = White, fontSize = 30.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold)
+                Text("Build a world\nthat boots your way.", color = White, fontSize = 30.sp, lineHeight = 35.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(9.dp))
                 Text("Design the interface, write your system code and bring your own OS files into one workspace.", color = Color(0xFFC1CCDC), fontSize = 13.sp, lineHeight = 19.sp)
                 Spacer(Modifier.height(20.dp))
@@ -336,6 +343,73 @@ private fun BuildsScreen(onBuild: () -> Unit) {
             Text("Create your first design preview from the code editor.", color = Muted, fontSize = 12.sp)
             Spacer(Modifier.height(14.dp))
             Button(onClick = onBuild, colors = ButtonDefaults.buttonColors(containerColor = Mint, contentColor = Ink)) { Text("Create build preview") }
+        }
+    }
+}
+
+@Composable
+private fun DesktopPreviewScreen(project: String) {
+    var startOpen by remember { mutableStateOf(false) }
+    var selectedWindow by remember { mutableStateOf("Welcome") }
+    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Live desktop preview", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+        Text("A clickable concept of the pearOS desktop shell.", color = Muted, fontSize = 12.sp)
+        Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Brush.linearGradient(listOf(Color(0xFF253C58), Color(0xFF5B4C83), Color(0xFF182A3C)))).padding(14.dp)) {
+            Column(Modifier.fillMaxSize()) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0xAA101625)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("pearOS", color = White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text("18:42   Wi-Fi  92%", color = White, fontSize = 10.sp)
+                }
+                Spacer(Modifier.height(18.dp))
+                Text("Good evening.", color = White, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Text(project, color = Color(0xFFD4DCEE), fontSize = 12.sp)
+                Spacer(Modifier.height(18.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Files", "Browser", "Settings").forEach { app ->
+                        Column(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xAA151B2B)).clickable { selectedWindow = app }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Rounded.Apps, null, tint = Mint)
+                            Text(app, color = White, fontSize = 10.sp)
+                        }
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                if (selectedWindow != "Welcome") {
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color(0xEE151B2B)).padding(14.dp)) {
+                        Text(selectedWindow, color = White, fontWeight = FontWeight.Bold)
+                        Text("Preview window. Native app integration is a later runtime milestone.", color = Muted, fontSize = 11.sp)
+                    }
+                }
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color(0xCC101625)).padding(10.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { startOpen = !startOpen }) { Icon(Icons.Rounded.GridView, null, tint = Mint) }
+                    listOf(Icons.Rounded.Folder, Icons.Rounded.Language, Icons.Rounded.Settings).forEach { Icon(it, null, tint = White, modifier = Modifier.size(22.dp)) }
+                }
+                if (startOpen) Text("Start menu  •  Files  •  Browser  •  Settings", color = White, fontSize = 11.sp, modifier = Modifier.padding(top = 8.dp))
+            }
+        }
+        Text("Preview only. This does not replace Android or run a separate OS.", color = Muted, fontSize = 10.sp)
+    }
+}
+
+@Composable
+private fun TemplatesScreen(onChoose: (String) -> Unit) {
+    val templates = listOf(
+        "pearOS Midnight" to defaultCode,
+        "PearOS Minimal" to defaultCode.replace("#8CF0C5", "#A7B9FF").replace("midnight", "minimal"),
+        "PearOS Desktop" to defaultCode.replace("custom", "desktop").replace("midnight", "desktop")
+    )
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Starter templates", color = White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+        Text("Load a configuration into the editor and customise it.", color = Muted, fontSize = 12.sp)
+        templates.forEach { (name, source) ->
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Panel).clickable { onChoose(source) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.DashboardCustomize, null, tint = Mint)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(name, color = White, fontWeight = FontWeight.SemiBold)
+                    Text("System configuration starter", color = Muted, fontSize = 10.sp)
+                }
+                Text("Use", color = Mint, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }

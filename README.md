@@ -7,7 +7,7 @@ pearOS Studio is the Android companion app for designing and prototyping a custo
 - Project overview and editable system configuration\n- Local persistence for project name and source across app restarts
 - Import supported text source/config files from Android's document picker
 - Export the current configuration as JSON
-- Clickable desktop-shell preview with a dock, status bar, start menu and sample app windows
+- Interactive phone preview with lock screen, home screen, app icons, dock, notifications and quick-settings panel
 - Starter configuration templates: Midnight, Minimal and Desktop
 - JSON configuration validation in the build centre
 - GitHub Actions workflow that builds and uploads a debug APK
@@ -28,7 +28,7 @@ This APK runs as an Android application. It does not replace Android, unlock the
 
 ## Planned engineering milestones
 1. Persistent multi-project workspace and file tree
-2. Visual desktop and mobile shell designer with editable widgets and app icons
+2. Visual phone-first shell designer with editable widgets and app icons
 3. Window manager prototype with resize, move, minimise and maximise
 4. Project asset manager and archive extraction for safe source bundles
 5. Structured configuration schema, validation and migration
